@@ -30,9 +30,9 @@ handlers._users.post= function(data,callback){
     //Check that all required fields are filled out
     let firstName= typeof(data.payload.firstName)=='string'&& data.payload.firstName.trim().length>0 ? data.payload.firstName.trim() : false;
     let lastName= typeof(data.payload.lastName)=='string'&& data.payload.lastName.trim().length>0 ? data.payload.lastName.trim() : false;
-    let phone= typeof(data.payload.phone)=='string'&& data.payload.phone.trim().length == 9 ? data.payload.phone.trim() : false;
+    let phone= typeof(data.payload.phone)=='string' && data.payload.phone.trim().length==9 ? data.payload.phone.trim() : false;
     let password= typeof(data.payload.password)=='string'&& data.payload.password.trim().length>0 ? data.payload.password.trim() : false;
-    let tasAgreement= typeof(data.payload.tasAgreement)=='boolean'&& data.payload.tasAgreement.trim()== true ? true : false;
+    let tasAgreement= typeof (data.payload.tasAgreement) == 'boolean' && data.payload.tasAgreement;
 
     if(firstName && lastName && phone && password && tasAgreement){
         // Make sure that the user doesn't exist
@@ -74,11 +74,32 @@ handlers._users.post= function(data,callback){
 };
 
 // Users-get
+// Require data: phone
+// Optional data: none
+// @TODO Only let an authenticated user access their objects. Dont't let them access anyone elses
 handlers._users.get= function(data,callback){
-
+    // Check the phone number is valid
+    let phone= typeof(data.queryStringObject.phone)=='string' && data.queryStringObject.phone.trim().length==9 ? data.queryStringObject.phone.trim() : false;
+    if(phone){
+        //Lookup the user
+        _data.read('users',phone,function(err,data){
+            if(!err && data){
+                // Remove the hashed password from the user object before returning it to the request
+                delete data.password;
+                callback(200,data);
+            } else{
+                callback(404,{'Error':'Could not find the user'});
+            }
+        });
+    } else{
+        callback(400,{'Error':'Missing required fields'});
+    }
 };
 
 // Users-put
+// Required data: phone
+// Optional data: firstName, lastName, password (at least one must be specified)
+// @TODO only let an authenticated user object. Don't let them update anyone else.
 handlers._users.put= function(data,callback){
 
 };
