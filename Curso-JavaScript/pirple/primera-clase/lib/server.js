@@ -1,60 +1,123 @@
 /*
 *
-* Worker related-tasks
+* Server related fields
 */
 
 //Dependencies
-let path= require('path');
-let fs= require('fs');
-let _data= require('./data');
-let http= require('http');
+let http = require('http');
 let https= require('https');
+let url = require('url');
+let StringDecoder = require('string_decoder').StringDecoder;
+let config= require('../config');
+let fs = require('fs');
+//let _data= require('./lib/data');
+let handlers= require('./handlers');
 let helpers= require('./helpers');
-let url=require('url');
+let path= require('path');
 
-//Instantiate the worker object
-let workers={};
+//Instantiate the server module object
+let server= {};
 
-//Lookup all the checks ,get their data, send a validator
-workers.gatherAllChecks= function(){
-    // Get all the checks
-    _data.list('checks',function(err,checks){
-        if(!err && checks && checks.length>0){
-            checks.forEach(function(check){
-               _data.read('checks',check,function(err,originalCheckData){
-                  if(!err && originalCheckData){
-                      workers.validateCheckData(originalCheckData);
-                  } else{
-                      console.log('Error reading one of the checks data ');
-                  }
-               });
-            });
-        } else{
-            console.log('Error: Could not find any checks to process');
-        }
+// Instantiate the HTTP Server
+server.httpServer = http.createServer(function (req, res) {
+    server.unifiedServer(req,res);
+});
+
+// Instantiate the HTTPS Server
+server.httpsServerOptions= {
+    'key': fs.readFileSync(path.join(__dirname,'../https/key.pem')),
+    'cert': fs.readFileSync(path.join(__dirname,'../https/cert.pem'))
+};
+
+server.httpsServer= https.createServer(server.httpsServerOptions, function(req,res){
+    server.unifiedServer(req,res);
+});
+
+
+// All the server logic for both the http and https server
+server.unifiedServer= function(req,res){
+    // Get the URL and parse it
+    let parseUrl = url.parse(req.url, true);
+
+    //Get the path
+    let path = parseUrl.pathname;
+    let trimmedPath = path.replace(/^\/+|\/+$/g, '');
+
+    //Get the query string as an object
+    let queryStringObject = parseUrl.query;
+
+    //Get the HTTP method
+    let method = req.method.toLowerCase();
+
+    //Get the headers as an object
+    let headers = req.headers;
+
+    //Get the payload, if any
+    let decoder = new StringDecoder('utf-8');
+    let buffer = '';
+    req.on('data', function (data) {
+        buffer += decoder.write(data);
+    });
+    req.on('end', function () {
+        buffer += decoder.end();
+
+        //Choose the handler this request should go to, If one is not found use notFound handler
+        let chosenHandler = typeof (server.router[trimmedPath]) !== 'undefined' ? server.router[trimmedPath] : handlers.notFound;
+
+        //Construct the data object to send the object
+        let data = {
+            'trimmedPath': trimmedPath,
+            'payload': helpers.parseJsonToObject(buffer),
+            'queryStringObject': queryStringObject,
+            'headers': headers,
+            'method': method
+        };
+
+        //Route the request to the handler specified in the router
+        chosenHandler(data, function (statusCode, payload) {
+            //Use the statusCode called back by the handler, or default to 200
+            statusCode = typeof (statusCode) == 'number' ? statusCode : 200;
+            //Use the payload called back by the handler, or default to empty object
+            payload = typeof (payload) == 'object' ? payload : {};
+
+            //Convert the payload to a string
+            let payloadString = JSON.stringify(payload);
+
+            //Return the response
+            res.setHeader('Content-Type', 'application/json');
+            res.writeHead(statusCode);
+            res.end(payloadString);
+
+            //Log the request path
+            console.log('Returning this responses: ', statusCode, payloadString);
+
+        });
+
+    });
+
+};
+
+//Define request router
+server.router={
+    'ping' : handlers.ping,
+    'users': handlers.users,
+    'tokens':handlers.tokens,
+    'checks': handlers.checks
+};
+
+// Init script
+server.init= function(){
+
+    //Start the HTTP server
+    server.httpServer.listen(config.httpPort, function () {
+        console.log("The server is listening on port " + config.httpPort + " in " + config.envName + " mode");
+    });
+
+    //Start the HTTPS server
+    server.httpsServer.listen(config.httpsPort, function () {
+        console.log("The server is listening on port " + config.httpsPort + " in " + config.envName + " mode");
     });
 };
 
-// Sanity-check the check-data
-workers.validateCheckData=function(originalCheckData){
-
-};
-
-// Timer to execute the worker-process once per a minute
-workers.loop= function(){
-    setInterval(function(){
-        workers.gatherAllChecks();
-    },1000*60);
-};
-
-// Init the script
-workers.init=function(){
-    //Execute all the checks immediately
-    workers.gatherAllChecks();
-
-    //Call the loop so the checks will execute later on
-    workers.loop();
-};
-
-//Export module
-module.exports= workers;
+//Export the module
+module.exports= server;
