@@ -11,6 +11,142 @@ let config= require('../config');
 //Define handlers
 let handlers= {};
 
+/*
+*
+* HTML handlers
+*/
+
+// Index handler
+handlers.index= function(data,callback){
+    // Reject any request that isn't GET
+    if(data.method == 'get'){
+
+        //Prepare data for interpolation
+        let templateData={
+           'head.title': 'Uptime Monitoring - Made Simple',
+           'head.description': 'We offer free, simple uptime monitoring for HTTP/HTTPS sites of all kinds. When your site goes down, we will send a text to let you know',
+           'body.class': 'index'
+        };
+
+        // Read in a template string
+        helpers.getTemplate('index',templateData,function(err,str){
+            if(!err && str){
+                //Add the universal header and footer
+                helpers.addUniversalTemplates(str,templateData,function(err,str){
+                   if(!err && str){
+                       //Return that page as HTML
+                       callback(200,str,'html');
+                   } else{
+                       callback(500,undefined,'html');
+                   }
+                });
+            }else{
+                callback(500,undefined,'html');
+            }
+        });
+    } else{
+        callback(405,undefined,'html');
+    }
+};
+
+//Create account handler
+handlers.accountCreate= function(data,callback){
+    // Reject any request that isn't GET
+    if(data.method == 'get'){
+
+        //Prepare data for interpolation
+        let templateData={
+            'head.title': 'Create an Account',
+            'head.description': 'Signup is easy and only takes a few seconds',
+            'body.class': 'accountCreate'
+        };
+
+        // Read in a template string
+        helpers.getTemplate('accountCreate',templateData,function(err,str){
+            if(!err && str){
+                //Add the universal header and footer
+                helpers.addUniversalTemplates(str,templateData,function(err,str){
+                    if(!err && str){
+                        //Return that page as HTML
+                        callback(200,str,'html');
+                    } else{
+                        callback(500,undefined,'html');
+                    }
+                });
+            }else{
+                callback(500,undefined,'html');
+            }
+        });
+    } else{
+        callback(405,undefined,'html');
+    }
+};
+
+// Favicon handler
+handlers.favicon= function(data,callback){
+    // Reject any method that isn't a GET
+    if(data.method=="get"){
+        // Read in the favicon's get
+        helpers.getStaticAsset('favicon.ico', function(err,data){
+           if(!err && data){
+               // Callback the data
+               callback(200,data,'favicon');
+           } else{
+               callback(500);
+           }
+        });
+    } else{
+        callback(405);
+    }
+};
+
+// Public asset
+handlers.public= function(data,callback){
+    // Reject any method that isn't a GET
+    if(data.method == "get"){
+        // Get the filename being requested
+        let trimmedAssetName= data.trimmedPath.replace('public/','').trim();
+        if(trimmedAssetName.length>0){
+            // Read the asset's data
+            helpers.getStaticAsset(trimmedAssetName,function(err,data){
+                if(!err && data){
+                    // Determine the content type (default to plain text)
+                    let contentType= 'plain';
+
+                    if(trimmedAssetName.indexOf('.css')>-1){
+                        contentType='css';
+                    }
+
+                    if(trimmedAssetName.indexOf('.png')>-1){
+                        contentType='png';
+                    }
+
+                    if(trimmedAssetName.indexOf('.jpg')>-1){
+                        contentType='jpg';
+                    }
+
+                    if(trimmedAssetName.indexOf('.ico')>-1){
+                        contentType='favicon';
+                    }
+
+                    //Callback the data
+                    callback(200,data,contentType);
+                }else{
+                    callback(404);
+                }
+            });
+        } else{
+            callback(404);
+        }
+    } else{
+        callback(405);
+    }
+};
+
+/*
+*
+* JSON API handlers
+*/
 // Users handler
 handlers.users= function(data,callback){
    let acceptableMethods= ['post','get','put','delete'];
