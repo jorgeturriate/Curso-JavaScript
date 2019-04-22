@@ -5,6 +5,10 @@
 //Dependencies
 let crypto= require('crypto');
 let config= require('../config');
+let https= require('https');
+let querystring= require('querystring');
+let path= require('path');
+let fs= require('fs');
 
 //Container for all the helpers
 let helpers= {};
@@ -67,15 +71,15 @@ helpers.sendTwilioSms= function(phone,msg,callback){
         //Stringify the payload
         let stringPayload= querystring.stringify(payload);
 
-        //Configure the request details
-        let requestDetails= {
-            'protocol': 'https',
-            'hostname': 'api.twilio.com',
-            'method': 'POST',
-            'path': '/2010-04-01/Accounts/'+config.twilio.accountSid+'/Messages.json',
-            'auth': config.twilio.accountSid+":"+config.twilio.authToken,
-            'headers': {
-                'Content-Type': 'application/x-www-form-urlencoded',
+        // Configure the request details
+        let requestDetails = {
+            'protocol' : 'https:',
+            'hostname' : 'api.twilio.com',
+            'method' : 'POST',
+            'path' : '/2010-04-01/Accounts/'+config.twilio.accountSid+'/Messages.json',
+            'auth' : config.twilio.accountSid+':'+config.twilio.authToken,
+            'headers' : {
+                'Content-Type' : 'application/x-www-form-urlencoded',
                 'Content-Length': Buffer.byteLength(stringPayload)
             }
         };
@@ -107,5 +111,88 @@ helpers.sendTwilioSms= function(phone,msg,callback){
     }
 };
 
+// Get the string content on a template
+helpers.getTemplate= function(templateName,data,callback){
+    templateName= typeof(templateName)=='string' && templateName.length>0 ? templateName : false;
+    data= typeof(data)=='object' && data !== null ? data : {};
+    if(templateName){
+        let templateDir= path.join(__dirname,'/../templates/');
+        fs.readFile(templateDir+templateName+'.html','utf8',function(err,str) {
+            if(!err && str && str.length>0){
+                // Interpolate data
+                let finalString= helpers.interpolate(str,data);
+                callback(false,finalString);
+            }else{
+                callback('No template could be found');
+            }
+        });
+    }else{
+        callback('A valid template name was no specified');
+    }
+};
+
+// Add the universal header and footer to a string, and pass provided data object to the header and footer for interpolation
+helpers.addUniversalTemplates= function(str,data,callback){
+    str= typeof(str)=='string' && str.length>0 ? str : '';
+    data= typeof(data)=='object' && data !== null ? data : {};
+    // Get the header
+    helpers.getTemplate('_header',data,function(err,headerString){
+        if(!err && headerString){
+            //Get the footer
+            helpers.getTemplate('_footer',data,function(err,footerString){
+                if(!err && footerString){
+                    //Add them together
+                    let fullString= headerString+str+footerString;
+                    callback(false,fullString);
+                } else{
+                    callback('Could not find the footer template');
+                }
+            });
+        } else{
+            callback('Could not find the header template');
+        }
+    });
+};
+
+//Take a given string and data object and find/replace all the keys within it
+helpers.interpolate= function(str,data){
+    str= typeof(str)=='string' && str.length>0 ? str : '';
+    data= typeof(data)=='object' && data !== null ? data : {};
+
+    // Add the templateGlobals do the data object, prepending their key name with "global"
+    for(let keyName in config.templateGlobals){
+        if(config.templateGlobals.hasOwnProperty(keyName)){
+            data['global.'+keyName]= config.templateGlobals[keyName];
+        }
+    }
+
+    // For each key in the data object, insert its value into the string at the corresponding placeholder
+    for(let key in data){
+        if(data.hasOwnProperty(key) && typeof(data[key])=='string'){
+            let replace= data[key];
+            let find= '{'+key+'}';
+            str= str.replace(find,replace);
+        }
+    }
+
+    return str;
+};
+
+// Get the contents of a static (public) asset
+helpers.getStaticAsset= function(filename,callback){
+    filename= typeof(filename) == 'string' && filename.length>0 ? filename : false;
+    if(filename){
+        let publicDir= path.join(__dirname,'/../public/');
+        fs.readFile(publicDir+filename,function(err,data){
+           if(!err && data){
+               callback(false,data);
+           } else{
+               callback('No file could be found');
+           }
+        });
+    } else{
+        callback('A valid file name was not specified');
+    }
+};
 
 module.exports= helpers;
