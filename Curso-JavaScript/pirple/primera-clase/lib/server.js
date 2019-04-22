@@ -66,6 +66,9 @@ server.unifiedServer= function(req,res){
         //Choose the handler this request should go to, If one is not found use notFound handler
         let chosenHandler = typeof (server.router[trimmedPath]) !== 'undefined' ? server.router[trimmedPath] : handlers.notFound;
 
+        // If the request is within the public directory, use the public handler instead
+        chosenHandler= trimmedPath.indexOf('public/') >-1 ? handlers.public : chosenHandler;
+
         //Construct the data object to send the object
         let data = {
             'trimmedPath': trimmedPath,
@@ -76,17 +79,48 @@ server.unifiedServer= function(req,res){
         };
 
         //Route the request to the handler specified in the router
-        chosenHandler(data, function (statusCode, payload) {
+        chosenHandler(data, function (statusCode, payload, contentType) {
+            // Determine the type of response (fallback to JSON)
+            contentType= typeof (contentType)=='string' ? contentType : 'json';
+
             //Use the statusCode called back by the handler, or default to 200
             statusCode = typeof (statusCode) == 'number' ? statusCode : 200;
-            //Use the payload called back by the handler, or default to empty object
-            payload = typeof (payload) == 'object' ? payload : {};
 
-            //Convert the payload to a string
-            let payloadString = JSON.stringify(payload);
+            //Return the response-parts that are content-specific
+            let payloadString='';
+            if(contentType=='json'){
+                res.setHeader('Content-Type', 'application/json');
+                //Use the payload called back by the handler, or default to empty object
+                payload = typeof (payload) == 'object' ? payload : {};
+                //Convert the payload to a string
+                payloadString = JSON.stringify(payload);
+            }
+            if(contentType=='html'){
+                res.setHeader('Content-Type', 'text/html');
+                payloadString= typeof(payload)=='string'? payload : '';
+            }
+            if(contentType=='favicon'){
+                res.setHeader('Content-Type', 'image/x-icon');
+                payloadString= typeof(payload)!= undefined ? payload : '';
+            }
+            if(contentType=='css'){
+                res.setHeader('Content-Type', 'text/css');
+                payloadString= typeof(payload)!= undefined? payload : '';
+            }
+            if(contentType=='png'){
+                res.setHeader('Content-Type', 'image/png');
+                payloadString= typeof(payload)!= undefined? payload : '';
+            }
+            if(contentType=='jpg'){
+                res.setHeader('Content-Type', 'image/jpeg');
+                payloadString= typeof(payload)!= undefined? payload : '';
+            }
+            if(contentType=='plain'){
+                res.setHeader('Content-Type', 'text/plain');
+                payloadString= typeof(payload)!= undefined? payload : '';
+            }
 
-            //Return the response
-            res.setHeader('Content-Type', 'application/json');
+            //Return the response-parts that are common to all content-types
             res.writeHead(statusCode);
             res.end(payloadString);
 
@@ -105,10 +139,21 @@ server.unifiedServer= function(req,res){
 
 //Define request router
 server.router={
+    '': handlers.index,
+    'account/create': handlers.accountCreate,
+    'account/edit': handlers.accountEdit,
+    'account/deleted': handlers.accountDeleted,
+    'session/create': handlers.sessionCreate,
+    'session/deleted': handlers.sessionDeleted,
+    'checks/all': handlers.checkList,
+    'checks/create': handlers.checksCreate,
+    'checks/edit': handlers.checksEdit,
     'ping' : handlers.ping,
-    'users': handlers.users,
-    'tokens':handlers.tokens,
-    'checks': handlers.checks
+    'api/users': handlers.users,
+    'api/tokens':handlers.tokens,
+    'api/checks': handlers.checks,
+    'favicon.ico': handlers.favicon,
+    'public' : handlers.public
 };
 
 // Init script
